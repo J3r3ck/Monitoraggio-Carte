@@ -1,4 +1,3 @@
-yaml
 name: Controllo disponibilità
 
 on:
@@ -24,5 +23,6 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_TELEGRAM: "1"
           CHECKS: "9"
           INTERVAL: "30"
