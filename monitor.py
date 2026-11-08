@@ -1,14 +1,16 @@
-import os, sys, time, requests
+import os, re, sys, time, requests
 from bs4 import BeautifulSoup
 
-URL = "https://shops.hareruyamtg.com/osaka/products/detail/194809?lang=JP"
+URL = "https://www.hareruyamtg.com/en/products/detail/194809?lang=JP"
 CHECKS = int(os.getenv("CHECKS", "1"))
 INTERVAL = int(os.getenv("INTERVAL", "30"))
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept-Language": "ja,en;q=0.8",
+    "Accept-Language": "en,ja;q=0.8",
 }
+# es. "NM 40,000 JPY 0"
+PATTERN = re.compile(r"\b(NM|SP|MP|HP)\s*[￥¥]?\s*([\d,]+)\s*(?:JPY|円)?\s*(\d+)\b")
 
 def telegram(text):
     r = requests.post(
@@ -22,21 +24,15 @@ def check():
     r = requests.get(URL, headers=HEADERS, timeout=20)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
-    for table in soup.find_all("table"):
-        rows = table.find_all("tr")
-        if not rows:
-            continue
-        head = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
-        if "在庫" not in head:
-            continue
-        idx = head.index("在庫")
-        found = []
-        for tr in rows[1:]:
-            cells = [c.get_text(strip=True) for c in tr.find_all(["th", "td"])]
-            if len(cells) > idx and cells[idx].isdigit() and int(cells[idx]) > 0:
-                found.append(f"{cells[0]} {cells[1]} (stock: {cells[idx]})")
-        return found
-    raise RuntimeError("Tabella stock non trovata: la pagina potrebbe essere cambiata")
+    for t in soup(["script", "style"]):
+        t.decompose()
+    text = soup.get_text(" ", strip=True)
+    head = text.split("Weekly Sold")[0]  # solo la tabella dell'articolo, non gli altri
+    rows = PATTERN.findall(head)
+    if not rows:
+        raise RuntimeError("Righe di stock non trovate: la pagina potrebbe essere cambiata")
+    print("Letto:", rows)
+    return [f"{c} {p} JPY (stock: {s})" for c, p, s in rows if int(s) > 0]
 
 def main():
     if os.getenv("TEST_TELEGRAM"):
